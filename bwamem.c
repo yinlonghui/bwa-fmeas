@@ -433,9 +433,9 @@ int mem_sort_and_dedup(int n, mem_alnreg_t *a, float mask_level_redun)
 	return m;
 }
 
-void mem_mark_primary_se(const mem_opt_t *opt, int n, mem_alnreg_t *a, int64_t id , int l_seq) // IMPORTANT: must run mem_sort_and_dedup() before calling this function
+void mem_mark_primary_se(const mem_opt_t *opt, int n, mem_alnreg_t *a, int64_t id ) // IMPORTANT: must run mem_sort_and_dedup() before calling this function
 { // similar to the loop in mem_chain_flt()
-	int i , k ;
+	int i ;
 	if (n == 0) return;
 #if 0
 	kvec_t(int) z;
@@ -451,26 +451,11 @@ void mem_mark_primary_se(const mem_opt_t *opt, int n, mem_alnreg_t *a, int64_t i
  *
  * 	Implement:
  * 	
- * 	1. secondary = 0 , means this aln reg have ignore , if this bp type is H and T, secondary =  i + 1 ( i > 0)  mean  i is corresponding T.
+ * 	1. secondary = 0 , means this aln reg have ignore , if a aln reg might be bp one side , [secondary =  i + 1 ( i > 0)]  i mean bp's other side .
  * 	2. To  adapt to print fuction , Sort aln reg base on secondary.
  *
  */
-	for( i = 0 ; i < n ; i++){
-		int S1_min, S1_max;
-		S1_min = a[i].qb >= l_seq - a[i].qe ? l_seq - a[i].qe : a[i].qb ;
-		S1_max = a[i].qb <= l_seq - a[i].qe ? l_seq - a[i].qe : a[i].qb ;
-		for( k = i + 1 ; k < n ; k++){
-			/*
-			 *  S1_min + S2_min = FN
-			 *  S2_max + S2_max = TN
-			 */
-//			double FMEAS;
-			int S2_min,S2_max;//,FP;
-			S2_min = a[k].qb >= l_seq - a[k].qe ?  l_seq - a[k].qe : a[k].qb ;
-			S2_max = a[k].qb <= l_seq - a[k].qe ?  l_seq - a[k].qe : a[k].qb ;
-
-		}
-	}
+	ks_introsort(mem_ars,n,a);
 
 
 /*
@@ -927,7 +912,7 @@ mem_alnreg_v mem_align1(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *
 	seq = malloc(l_seq);
 	memcpy(seq, seq_, l_seq); // makes a copy of seq_
 	ar = mem_align1_core(opt, bwt, bns, pac, l_seq, seq);
-	mem_mark_primary_se(opt, ar.n, ar.a, lrand48(),l_seq);
+	mem_mark_primary_se(opt, ar.n, ar.a, lrand48());
 	free(seq);
 	return ar;
 }
@@ -953,6 +938,7 @@ mem_aln_t mem_reg2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *
 	a.mapq = ar->secondary < 0? mem_approx_mapq_se(opt, ar) : 0;
 	if (ar->secondary >= 0) a.flag |= 0x100; // secondary alignment
 	if (bwa_fix_xref(opt->mat, opt->q, opt->r, opt->w, bns, pac, (uint8_t*)query, &qb, &qe, &rb, &re) < 0) {
+		fprintf(stderr, "%ld %ld %ld %ld\n",qb,qe,rb,re);
 		fprintf(stderr, "[E::%s] If you see this message, please let the developer know. Abort. Sorry.\n", __func__);
 		exit(1);
 	}
@@ -1024,6 +1010,8 @@ static void worker1(void *data, int i, int tid)
 	} else {
 		w->regs[i<<1|0] = mem_align1_core(w->opt, w->bwt, w->bns, w->pac, w->seqs[i<<1|0].l_seq, w->seqs[i<<1|0].seq);
 		w->regs[i<<1|1] = mem_align1_core(w->opt, w->bwt, w->bns, w->pac, w->seqs[i<<1|1].l_seq, w->seqs[i<<1|1].seq);
+		mem_mark_primary_se(w->opt, w->regs[i<<1|0].n, w->regs[i<<1|0].a, w->n_processed + i );
+		mem_mark_primary_se(w->opt, w->regs[i<<1|1].n, w->regs[i<<1|1].a, w->n_processed + i );
 	}
 }
 
@@ -1032,7 +1020,7 @@ static void worker2(void *data, int i, int tid)
 	extern int mem_sam_pe(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, const mem_pestat_t pes[4], uint64_t id, bseq1_t s[2], mem_alnreg_v a[2]);
 	worker_t *w = (worker_t*)data;
 	if (!(w->opt->flag&MEM_F_PE)) {
-		mem_mark_primary_se(w->opt, w->regs[i].n, w->regs[i].a, w->n_processed + i , w->seqs[i].l_seq);
+		mem_mark_primary_se(w->opt, w->regs[i].n, w->regs[i].a, w->n_processed + i );
 		mem_reg2sam_se(w->opt, w->bns, w->pac, &w->seqs[i], &w->regs[i], 0, 0);
 		free(w->regs[i].a);
 	} else {

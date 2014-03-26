@@ -1,30 +1,26 @@
 #include <stdlib.h>
 #include <string.h>
-#include <stdio.h>
-#include <math.h>
+#include <stdio.h> 
+#include <math.h> 
 #include "kstring.h"
 #include "bwamem.h"
 #include "kvec.h"
-#include "utils.h"
+#include "utils.h" 
+#include "ksort.h"
 #include "ksw.h"
-
-#ifdef USE_MALLOC_WRAPPERS
-#  include "malloc_wrap.h"
-#endif
-
-
-#define MIN_RATIO     0.8
-#define MIN_DIR_CNT   10
-#define MIN_DIR_RATIO 0.05
-#define OUTLIER_BOUND 2.0
+#ifdef USE_MALLOC_WRAPPERS 
+#  include "malloc_wrap.h" 
+#endif 
+#define MIN_RATIO     0.8 
+#define MIN_DIR_CNT   10 
+#define MIN_DIR_RATIO 0.05 
+#define OUTLIER_BOUND 2.0 
 #define MAPPING_BOUND 3.0
-#define MAX_STDDEV    4.0
-
+#define MAX_STDDEV    4.0 
 static inline int mem_infer_dir(int64_t l_pac, int64_t b1, int64_t b2, int64_t *dist)
-{
-	int64_t p2;
-	int r1 = (b1 >= l_pac), r2 = (b2 >= l_pac);
-	p2 = r1 == r2? b2 : (l_pac<<1) - 1 - b2; // p2 is the coordinate of read 2 on the read 1 strand
+{ 
+	int64_t p2; 
+	int r1 = (b1 >= l_pac), r2 = (b2 >= l_pac); p2 = r1 == r2? b2 : (l_pac<<1) - 1 - b2; // p2 is the coordinate of read 2 on the read 1 strand 
 	*dist = p2 > b1? p2 - b1 : b1 - p2;
 	return (r1 == r2? 0 : 1) ^ (p2 > b1? 0 : 3);
 }
@@ -41,6 +37,112 @@ static int cal_sub(const mem_opt_t *opt, mem_alnreg_v *r)
 		}
 	}
 	return j < r->n? r->a[j].score : opt->min_seed_len * opt->a;
+}
+
+typedef struct{
+	double FMEAS;
+	int	x,y;
+	int	score;
+}FF_t;
+
+#define flt_FF_t(a,b)  ( (a).FMEAS > (b).FMEAS)
+KSORT_INIT(ff_mem_flt,FF_t,flt_FF_t)
+
+mem_alnreg_v mem_fmeas_fliter_se(mem_alnreg_v a , int n , int l_seq , int mode)
+{
+	mem_alnreg_v  aa  ;
+	int i , j ;
+	kvec_t(FF_t)  k_ff_t ;
+	kv_init(k_ff_t);
+	kv_init(aa);
+	//   caculate FMEAS value 
+	if(n == 0) return aa ;
+	for( i = 0 ;  i <  a.n ; i++){
+		mem_alnreg_t  *p_ar =  a.a + i ;
+		for( j = i + 1 ; j < a.n ; j++){
+			FF_t  tmp ;
+			mem_alnreg_t  *q_ar =  a.a + j ;
+			double  sens  ,  spec ;
+			int FN =  0 , TP = 0 ,TN = 0 , FP = 0 ;
+			int A,B,C,D;
+			if( p_ar->qb < q_ar->qb || (p_ar->qb  ==  q_ar->qb &&  p_ar->qe >=  q_ar->qe)){ //   p  q
+				A =  p_ar->qb ;
+				B =  p_ar->qe ;
+				C =  q_ar->qb ;
+				D =  q_ar->qe ;
+			}else {  //   p   q  
+				A =  q_ar->qb ;
+				B =  q_ar->qe ;
+				C =  p_ar->qb ;
+				D =  p_ar->qe ;
+			}
+			if(B <= C){
+				TP = B - A + D - C ;
+				FN = l_seq - D + A  + C - B ; 
+				TN = l_seq ;
+				FP = 0 ;
+			}else if( B > C && D <=B){ // contain
+				TP = D - A ;
+				FN = l_seq - D + A  ;
+				TN = l_seq - B + C  ; 
+				FP = B - C ;
+			}else{
+				TP = D - A ;
+				FN = l_seq - D + A  ;
+				TN = l_seq - TP ;
+				FP = B - C ;
+			}
+			sens = (double)TP/(double)(TP+FN);
+			spec = (double)TN/(double)(TN+FP);
+			tmp.FMEAS =  (2*spec*sens)/(spec+sens);
+			tmp.score =  p_ar->score + q_ar->score;
+			tmp.x =  i  , tmp.y = j ;
+			if(tmp.FMEAS > 0.95) kv_push(FF_t,k_ff_t,tmp);
+		}
+	}
+	ks_introsort(ff_mem_flt, k_ff_t.n, k_ff_t.a);	
+//	printf("************\n");
+	kv_push(mem_alnreg_t,aa,a.a[0]);
+	double max_feas ;
+	int   score ;
+	if( k_ff_t.n == 0 ) return aa;
+	
+	max_feas = k_ff_t.a[0].FMEAS ;
+	score =  k_ff_t.a[0].score ;
+	if(mode){
+
+		for( i = 0 ;  i <  kv_size(k_ff_t) ; i++){
+			FF_t  p  = kv_A(k_ff_t,i);
+			if(p.x == 0) kv_push(mem_alnreg_t,aa,a.a[p.y]);
+		}
+
+		for( i = 0 ;  i  < kv_size(k_ff_t); i++){
+			FF_t  p  = kv_A(k_ff_t,i);
+			if(max_feas != p.FMEAS || score != p.score )  break;
+			if(p.x == 0) continue ;
+			kv_push(mem_alnreg_t,aa,a.a[p.x]);
+			kv_push(mem_alnreg_t,aa,a.a[p.y]);
+		}
+	}else{
+		for( i = 0 ;  i  < kv_size(k_ff_t); i++){
+			FF_t  p  = kv_A(k_ff_t,i);
+			if(max_feas != p.FMEAS || score != p.score )  break;
+			if(p.x == 0) continue ;
+			kv_push(mem_alnreg_t,aa,a.a[p.x]);
+			kv_push(mem_alnreg_t,aa,a.a[p.y]);
+		}
+
+	}
+#if 0
+	for( i = 0 ;  i < kv_size(aa); i++){
+		mem_alnreg_t  *q = aa.a + i;
+		printf("%db: %d  %de:%d \t" , i, q->qb , i, q->qe);
+		if( i == kv_size(aa) -1 )  printf("\n");
+	}
+#endif
+
+
+	return  aa ; 
 }
 
 void mem_pestat(const mem_opt_t *opt, int64_t l_pac, int n, const mem_alnreg_v *regs, mem_pestat_t pes[4])
@@ -235,7 +337,7 @@ int mem_pair(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, const mem_
 
 int mem_sam_pe(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, const mem_pestat_t pes[4], uint64_t id, bseq1_t s[2], mem_alnreg_v a[2])
 {
-	extern void mem_mark_primary_se(const mem_opt_t *opt, int n, mem_alnreg_t *a, int64_t id , int l_seq);
+	extern void mem_mark_primary_se(const mem_opt_t *opt, int n, mem_alnreg_t *a, int64_t id );
 	extern int mem_approx_mapq_se(const mem_opt_t *opt, const mem_alnreg_t *a);
 	extern void mem_reg2sam_se(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, bseq1_t *s, mem_alnreg_v *a, int extra_flag, const mem_aln_t *m);
 	extern void mem_aln2sam(const bntseq_t *bns, kstring_t *str, bseq1_t *s, int n, const mem_aln_t *list, int which, const mem_aln_t *m);
@@ -243,6 +345,7 @@ int mem_sam_pe(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, co
 	int n = 0, i, j, z[2], o, subo, n_sub, extra_flag = 1;
 	kstring_t str;
 	mem_aln_t h[2];
+	mem_alnreg_v aa[2];
 
 	str.l = str.m = 0; str.s = 0;
 	if (!(opt->flag & MEM_F_NO_RESCUE)) { // then perform SW for the best alignment
@@ -257,8 +360,8 @@ int mem_sam_pe(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, co
 				n += mem_matesw(opt, bns->l_pac, pac, pes, &b[i].a[j], s[!i].l_seq, (uint8_t*)s[!i].seq, &a[!i]);
 		free(b[0].a); free(b[1].a);
 	}
-	mem_mark_primary_se(opt, a[0].n, a[0].a, id<<1|0,s[0].l_seq);
-	mem_mark_primary_se(opt, a[1].n, a[1].a, id<<1|1,s[1].l_seq);
+	mem_mark_primary_se(opt, a[0].n, a[0].a, id<<1|0);
+	mem_mark_primary_se(opt, a[1].n, a[1].a, id<<1|1);
 	if (opt->flag&MEM_F_NOPAIRING) goto no_pairing;
 	// pairing single-end hits
 	if (a[0].n && a[1].n && (o = mem_pair(opt, bns->l_pac, pac, pes, s, a, id, &subo, &n_sub, z)) > 0) {
@@ -305,32 +408,47 @@ int mem_sam_pe(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, co
 		}
 		z[0] = z[1] = 0;
 		// write SAM
+		
+		// find the breakpoint
+		int bp_i  =  0 ;
+	//	for( k  = 1 ; k < a[0].n ; k++)  a[0].a[k].secondary = 1 ;
+	//	for( k  = 1 ; k < a[1].n ; k++)  a[1].a[k].secondary = 1 ;
+
+		bp_i  = (a[0].a[0].score > a[1].a[1].score) ? 1 : 0 ;
+		aa[bp_i] = mem_fmeas_fliter_se(a[bp_i],a[bp_i].n,s[bp_i].l_seq,1);
+		kv_init(aa[1-bp_i]);
+		kv_push(mem_alnreg_t,aa[1-bp_i],a[1-bp_i].a[0]);
+		
 #if  1
-		h[0] = mem_reg2aln(opt, bns, pac, s[0].l_seq, s[0].seq, &a[0].a[z[0]]); h[0].mapq = q_se[0]; h[0].flag |= 0x40 | extra_flag;
-		h[1] = mem_reg2aln(opt, bns, pac, s[1].l_seq, s[1].seq, &a[1].a[z[1]]); h[1].mapq = q_se[1]; h[1].flag |= 0x80 | extra_flag;
+		h[0] = mem_reg2aln(opt, bns, pac, s[0].l_seq, s[0].seq, &aa[0].a[z[0]]); h[0].mapq = q_se[0]; h[0].flag |= 0x40 | extra_flag;
+		h[1] = mem_reg2aln(opt, bns, pac, s[1].l_seq, s[1].seq, &aa[1].a[z[1]]); h[1].mapq = q_se[1]; h[1].flag |= 0x80 | extra_flag;
 		mem_reg2sam_se(opt, bns, pac, &s[0], &a[0], 0x41|extra_flag, &h[1]);
 		mem_reg2sam_se(opt, bns, pac, &s[1], &a[1], 0x81|extra_flag, &h[0]);
 #endif
 		if (strcmp(s[0].name, s[1].name) != 0) err_fatal(__func__, "paired reads have different names: \"%s\", \"%s\"\n", s[0].name, s[1].name);
-		free(h[0].cigar); free(h[1].cigar);
+		free(h[0].cigar); free(h[1].cigar);free(aa[0].a); free(aa[1].a);
 	} else goto no_pairing;
 	return n;
 
 no_pairing:
+#if  1
 	for (i = 0; i < 2; ++i) {
 		if (a[i].n && a[i].a[0].score >= opt->T)
 			h[i] = mem_reg2aln(opt, bns, pac, s[i].l_seq, s[i].seq, &a[i].a[0]);
 		else h[i] = mem_reg2aln(opt, bns, pac, s[i].l_seq, s[i].seq, 0);
 	}
+	aa[0] = mem_fmeas_fliter_se(a[0],a[0].n,s[0].l_seq,0);
+	aa[1] = mem_fmeas_fliter_se(a[1],a[1].n,s[1].l_seq,0);
 	if (!(opt->flag & MEM_F_NOPAIRING) && h[0].rid == h[1].rid && h[0].rid >= 0) { // if the top hits from the two ends constitute a proper pair, flag it.
 		int64_t dist;
 		int d;
 		d = mem_infer_dir(bns->l_pac, a[0].a[0].rb, a[1].a[0].rb, &dist);
 		if (!pes[d].failed && dist >= pes[d].low && dist <= pes[d].high) extra_flag |= 2;
 	}
-	mem_reg2sam_se(opt, bns, pac, &s[0], &a[0], 0x41|extra_flag, &h[1]);
-	mem_reg2sam_se(opt, bns, pac, &s[1], &a[1], 0x81|extra_flag, &h[0]);
+	mem_reg2sam_se(opt, bns, pac, &s[0], &aa[0], 0x41|extra_flag, &h[1]);
+	mem_reg2sam_se(opt, bns, pac, &s[1], &aa[1], 0x81|extra_flag, &h[0]);
 	if (strcmp(s[0].name, s[1].name) != 0) err_fatal(__func__, "paired reads have different names: \"%s\", \"%s\"\n", s[0].name, s[1].name);
-	free(h[0].cigar); free(h[1].cigar);
+	free(h[0].cigar); free(h[1].cigar);free(aa[0].a);free(aa[1].a);
+#endif
 	return n;
 }
