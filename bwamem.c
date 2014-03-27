@@ -853,7 +853,7 @@ void mem_reg2sam_se(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pa
 	for (k = 0; k < a->n; ++k) {
 		mem_alnreg_t *p = &a->a[k];
 		mem_aln_t *q;
-		if (p->score < opt->T) continue;
+//		if (p->score < opt->T) continue;
 		if (p->secondary >= 0 && !(opt->flag&MEM_F_ALL)) continue;
 		if (p->secondary >= 0 && p->score < a->a[p->secondary].score * .5) continue;
 		q = kv_pushp(mem_aln_t, aa);

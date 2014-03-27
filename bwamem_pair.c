@@ -101,7 +101,6 @@ mem_alnreg_v mem_fmeas_fliter_se(mem_alnreg_v a , int n , int l_seq , int mode)
 		}
 	}
 	ks_introsort(ff_mem_flt, k_ff_t.n, k_ff_t.a);	
-//	printf("************\n");
 	kv_push(mem_alnreg_t,aa,a.a[0]);
 	double max_feas ;
 	int   score ;
