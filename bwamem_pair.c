@@ -87,10 +87,12 @@ mem_alnreg_v mem_fmeas_fliter_se(mem_alnreg_v a , int n , int l_seq , int mode)
 				TN = l_seq - B + C  ; 
 				FP = B - C ;
 			}else{
+				continue ;
 				TP = D - A ;
 				FN = l_seq - D + A  ;
 				TN = l_seq - TP ;
 				FP = B - C ;
+
 			}
 			sens = (double)TP/(double)(TP+FN);
 			spec = (double)TN/(double)(TN+FP);
@@ -430,8 +432,8 @@ int mem_sam_pe(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, co
 #if  1
 		h[0] = mem_reg2aln(opt, bns, pac, s[0].l_seq, s[0].seq, &aa[0].a[z[0]]); h[0].mapq = q_se[0]; h[0].flag |= 0x40 | extra_flag;
 		h[1] = mem_reg2aln(opt, bns, pac, s[1].l_seq, s[1].seq, &aa[1].a[z[1]]); h[1].mapq = q_se[1]; h[1].flag |= 0x80 | extra_flag;
-		mem_reg2sam_se(opt, bns, pac, &s[0], &a[0], 0x41|extra_flag, &h[1]);
-		mem_reg2sam_se(opt, bns, pac, &s[1], &a[1], 0x81|extra_flag, &h[0]);
+		mem_reg2sam_se(opt, bns, pac, &s[0], &aa[0], 0x41|extra_flag, &h[1]);
+		mem_reg2sam_se(opt, bns, pac, &s[1], &aa[1], 0x81|extra_flag, &h[0]);
 #endif
 		if (strcmp(s[0].name, s[1].name) != 0) err_fatal(__func__, "paired reads have different names: \"%s\", \"%s\"\n", s[0].name, s[1].name);
 		free(h[0].cigar); free(h[1].cigar);free(aa[0].a); free(aa[1].a);
