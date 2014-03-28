@@ -105,11 +105,11 @@ mem_alnreg_v mem_fmeas_fliter_se(mem_alnreg_v a , int n , int l_seq , int mode)
 	ks_introsort(ff_mem_flt, k_ff_t.n, k_ff_t.a);	
 	kv_push(mem_alnreg_t,aa,a.a[0]);
 	double max_feas ;
-	int   score ;
+//	int   score ;
 	if( k_ff_t.n == 0 ) return aa;
 	
 	max_feas = k_ff_t.a[0].FMEAS ;
-	score =  k_ff_t.a[0].score ;
+//	score =  k_ff_t.a[0].score ;
 	if(mode){
 		int cnt = 0 ;
 		for( i = 0 ;  i <  kv_size(k_ff_t) ; i++){
@@ -128,7 +128,7 @@ mem_alnreg_v mem_fmeas_fliter_se(mem_alnreg_v a , int n , int l_seq , int mode)
 
 		for( i = 0 ;  i  < kv_size(k_ff_t); i++){
 			FF_t  p  = kv_A(k_ff_t,i);
-			if(max_feas != p.FMEAS || score != p.score )  break;
+			if(max_feas != p.FMEAS )  break;
 			if(p.x == 0) continue ;
 			kv_push(mem_alnreg_t,aa,a.a[p.x]);
 			kv_push(mem_alnreg_t,aa,a.a[p.y]);
@@ -136,7 +136,7 @@ mem_alnreg_v mem_fmeas_fliter_se(mem_alnreg_v a , int n , int l_seq , int mode)
 	}else{
 		for( i = 0 ;  i  < kv_size(k_ff_t); i++){
 			FF_t  p  = kv_A(k_ff_t,i);
-			if(max_feas != p.FMEAS || score != p.score )  break;
+			if(max_feas != p.FMEAS )  break;
 			if(p.x == 0) continue ;
 			kv_push(mem_alnreg_t,aa,a.a[p.x]);
 			kv_push(mem_alnreg_t,aa,a.a[p.y]);
