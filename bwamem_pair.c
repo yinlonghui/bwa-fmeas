@@ -109,10 +109,19 @@ mem_alnreg_v mem_fmeas_fliter_se(mem_alnreg_v a , int n , int l_seq , int mode)
 	max_feas = k_ff_t.a[0].FMEAS ;
 	score =  k_ff_t.a[0].score ;
 	if(mode){
-
+		int cnt = 0 ;
 		for( i = 0 ;  i <  kv_size(k_ff_t) ; i++){
 			FF_t  p  = kv_A(k_ff_t,i);
-			if(p.x == 0) kv_push(mem_alnreg_t,aa,a.a[p.y]);
+			if(p.x == 0 && cnt == 0){
+				kv_push(mem_alnreg_t,aa,a.a[p.y]);
+				cnt = 1 ;
+			}else if(p.x == 0){
+				kv_push(mem_alnreg_t,aa,a.a[0]);
+				kv_push(mem_alnreg_t,aa,a.a[p.y]);
+
+			}
+
+
 		}
 
 		for( i = 0 ;  i  < kv_size(k_ff_t); i++){

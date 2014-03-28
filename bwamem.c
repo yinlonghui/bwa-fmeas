@@ -938,7 +938,6 @@ mem_aln_t mem_reg2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *
 	a.mapq = ar->secondary < 0? mem_approx_mapq_se(opt, ar) : 0;
 	if (ar->secondary >= 0) a.flag |= 0x100; // secondary alignment
 	if (bwa_fix_xref(opt->mat, opt->q, opt->r, opt->w, bns, pac, (uint8_t*)query, &qb, &qe, &rb, &re) < 0) {
-		fprintf(stderr, "%ld %ld %ld %ld\n",qb,qe,rb,re);
 		fprintf(stderr, "[E::%s] If you see this message, please let the developer know. Abort. Sorry.\n", __func__);
 		exit(1);
 	}
