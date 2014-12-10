@@ -787,6 +787,7 @@ void mem_aln2sam(const bntseq_t *bns, kstring_t *str, bseq1_t *s, int n, const m
 	if (p->score >= 0) { kputsn("\tAS:i:", 6, str); kputw(p->score, str); }
 	if (p->sub >= 0) { kputsn("\tXS:i:", 6, str); kputw(p->sub, str); }
 	if (bwa_rg_id[0]) { kputsn("\tRG:Z:", 6, str); kputs(bwa_rg_id, str); }
+#if 0
 	if (!(p->flag & 0x100)) { // not multi-hit
 		for (i = 0; i < n; ++i)
 			if (i != which && !(list[i].flag&0x100)) break;
@@ -808,6 +809,7 @@ void mem_aln2sam(const bntseq_t *bns, kstring_t *str, bseq1_t *s, int n, const m
 			}
 		}
 	}
+#endif
 	if (s->comment) { kputc('\t', str); kputs(s->comment, str); }
 	kputc('\n', str);
 }

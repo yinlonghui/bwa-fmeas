@@ -67,31 +67,27 @@ mem_alnreg_v mem_fmeas_fliter_se(mem_alnreg_v a , int n , int l_seq , int mode)
 			int A,B,C,D;
 			if( p_ar->qb < q_ar->qb || (p_ar->qb  ==  q_ar->qb &&  p_ar->qe >=  q_ar->qe)){ //   p  q
 				A =  p_ar->qb ;
-				B =  p_ar->qe ;
+				B =  p_ar->qe - 1 ;
 				C =  q_ar->qb ;
-				D =  q_ar->qe ;
+				D =  q_ar->qe - 1 ;
 			}else {  //   p   q  
 				A =  q_ar->qb ;
-				B =  q_ar->qe ;
+				B =  q_ar->qe - 1;
 				C =  p_ar->qb ;
-				D =  p_ar->qe ;
+				D =  p_ar->qe - 1;
 			}
-			if(B <= C){
-				TP = B - A + D - C ;
-				FN = l_seq - D + A  + C - B ; 
+			if(B < C){
+				TP = B - A + D - C + 2 ;
+				FN = l_seq - D - 1  + A  + C - B - 1 ; 
 				TN = l_seq ;
 				FP = 0 ;
-			}else if( B > C && D <=B){ // contain
-				TP = D - A ;
-				FN = l_seq - D + A  ;
-				TN = l_seq - B + C  ; 
-				FP = B - C ;
-			}else{
+			}else if( D <= B){ // contain
 				continue ;
-				TP = D - A ;
-				FN = l_seq - D + A  ;
-				TN = l_seq - TP ;
-				FP = B - C ;
+			}else{
+				TP = D - A + 1 ;
+				FN = l_seq - D - 1 + A  ;
+				FP = B - C + 1 ;
+				TN = l_seq - FP;
 
 			}
 			sens = (double)TP/(double)(TP+FN);
@@ -134,15 +130,25 @@ mem_alnreg_v mem_fmeas_fliter_se(mem_alnreg_v a , int n , int l_seq , int mode)
 			kv_push(mem_alnreg_t,aa,a.a[p.y]);
 		}
 	}else{
+		int cnt = 0 ;
 		for( i = 0 ;  i  < kv_size(k_ff_t); i++){
 			FF_t  p  = kv_A(k_ff_t,i);
 			if(max_feas != p.FMEAS )  break;
-			if(p.x == 0) continue ;
+			if(p.x == 0 && cnt == 0){
+				kv_push(mem_alnreg_t,aa,a.a[p.y]);
+				continue ;
+			}else if( p.x == 0 ){
+				kv_push(mem_alnreg_t,aa,a.a[0]);
+				kv_push(mem_alnreg_t,aa,a.a[p.y]);
+				continue ;
+			}
 			kv_push(mem_alnreg_t,aa,a.a[p.x]);
 			kv_push(mem_alnreg_t,aa,a.a[p.y]);
 		}
 
 	}
+	kv_destroy(k_ff_t);
+
 #if 0
 	for( i = 0 ;  i < kv_size(aa); i++){
 		mem_alnreg_t  *q = aa.a + i;
@@ -382,7 +388,7 @@ int mem_sam_pe(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, co
 				if (a[i].a[j].secondary < 0 && a[i].a[j].score >= opt->T) break;
 			is_multi[i] = j < a[i].n? 1 : 0;
 		}
-		if (is_multi[0] || is_multi[1]) goto no_pairing; // TODO: in rare cases, the true hit may be long but with low score
+		//if (is_multi[0] || is_multi[1]) goto no_pairing; // TODO: in rare cases, the true hit may be long but with low score
 		// compute mapQ for the best SE hit
 		score_un = a[0].a[0].score + a[1].a[0].score - opt->pen_unpaired;
 		//q_pe = o && subo < o? (int)(MEM_MAPQ_COEF * (1. - (double)subo / o) * log(a[0].a[z[0]].seedcov + a[1].a[z[1]].seedcov) + .499) : 0;
@@ -424,7 +430,7 @@ int mem_sam_pe(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, co
 	//	for( k  = 1 ; k < a[0].n ; k++)  a[0].a[k].secondary = 1 ;
 	//	for( k  = 1 ; k < a[1].n ; k++)  a[1].a[k].secondary = 1 ;
 
-		bp_i  = (a[0].a[0].score > a[1].a[1].score) ? 1 : 0 ;
+		bp_i  = (a[0].a[0].score > a[1].a[0].score) ? 1 : 0 ;
 		aa[bp_i] = mem_fmeas_fliter_se(a[bp_i],a[bp_i].n,s[bp_i].l_seq,1);
 		kv_init(aa[1-bp_i]);
 		kv_push(mem_alnreg_t,aa[1-bp_i],a[1-bp_i].a[0]);
